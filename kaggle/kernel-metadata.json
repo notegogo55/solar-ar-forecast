@@ -1,0 +1,13 @@
+{
+  "id": "<you>/solar-train",
+  "title": "solar-train",
+  "code_file": "run_train.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": ["<you>/solar-event-windows-v1", "<you>/solar-ckpts"],
+  "competition_sources": [],
+  "kernel_sources": []
+}

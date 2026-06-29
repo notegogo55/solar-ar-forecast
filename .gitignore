@@ -1,0 +1,18 @@
+# data + heavy artifacts NEVER go in git (they live in Kaggle Datasets)
+data/
+outputs/
+checkpoints/
+*.fits
+*.fts
+*.pth
+*.pt
+*.h5
+*.npy
+*.npz
+# env / secrets
+.env
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+.venv/
+kaggle.json

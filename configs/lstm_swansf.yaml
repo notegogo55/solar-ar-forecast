@@ -1,0 +1,10 @@
+# Forecasting (Track B) — develop/validate on SWAN-SF first, runs LOCAL on 1650/CPU.
+dataset: swan_sf
+target: "ge_M_within_24h"    # D7
+lookback_hours: 24
+ensemble: [holt_winters, lstm]
+# validation protocol (D8): time-block + whole-AR split, resample TRAIN only,
+# metrics TSS/HSS/BSS + reliability, one held-out window evaluated once.
+split: time_block_whole_ar
+resample: train_only
+metrics: [tss, hss, bss, reliability]

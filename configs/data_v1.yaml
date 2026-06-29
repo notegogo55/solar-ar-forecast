@@ -1,0 +1,39 @@
+# Forecasting data scope (D5 / D7 / D8). Full-disk 1024, event-windows, 1h cadence.
+#
+# SAMPLING PHILOSOPHY (locked): take ALL qualifying HARPs in each window; keep the
+# natural class imbalance; resample TRAIN ONLY (never the test set). Do NOT
+# hand-balance ARs — that would break the true base rate the held-out set relies on.
+
+resolution: 1024              # server-side rescale in JSOC export (never downsample locally)
+cadence_minutes: 60
+channels_aia: [94, 131, 171, 193, 211, 304, 335, 1600]
+include_hmi_magnetogram: true
+
+# Event windows (flare-rich solar max). v1 fetches window 1 FIRST to unblock the spine;
+# window 2 is the first expansion — it provides cross-AR / cross-cycle held-out positives,
+# which is what makes the skill score meaningful (one window alone cannot, due to whole-AR split).
+fetch_order: [w1_oct2014]     # fetch this first; add w2 when the spine runs
+event_windows:
+  - id: w1_oct2014
+    start: "2014-10-17"
+    end:   "2014-10-30"
+    note:  "AR 12192 disk passage — most flare-productive site of Cycle 24 (6 X + many M). Flare-rich, CME-poor."
+  - id: w2_may2024
+    start: "2024-05-06"
+    end:   "2024-05-16"
+    note:  "AR 13664 — May 2024 Gannon superstorm, multiple X-class + CME-rich (Cycle 25). Expansion window."
+
+# AR / timestep inclusion filters
+filters:
+  central_meridian_deg: 70    # sample only |longitude| <= 70 deg (avoid limb foreshortening)
+  require_noaa_number: true   # labels + identity need a NOAA AR (D4); drop HARPs without one
+  min_coverage_hours: 48      # AR must have >=48h of valid in-window, in-longitude frames
+  drop_bad_quality: true      # drop frames flagged by the SHARP QUALITY keyword
+
+# Labeling / sampling (D7 / D9)
+target: "ge_M1.0_within_24h"
+lookback_hours: 24
+predict_window_hours: 24      # positive iff a >=M1.0 flare occurs within the next 24h
+sample_stride_hours: 1        # emit a sliding sample every hour along each AR's series
+
+out_dataset: solar-event-windows-v1

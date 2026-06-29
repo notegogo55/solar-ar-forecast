@@ -1,0 +1,16 @@
+# Track A — data + imaging
+sunpy
+drms
+astropy
+scikit-image
+# modeling
+numpy
+pandas
+scikit-learn
+pyyaml
+tqdm
+matplotlib
+# Track B — forecasting
+statsmodels
+# torch/torchvision are preinstalled on Kaggle GPU images; install locally only if needed:
+# torch torchvision

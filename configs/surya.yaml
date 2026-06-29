@@ -1,0 +1,9 @@
+# Segmentation — Surya AR-seg downstream (LoRA). Runs on Kaggle 16GB, NOT local 1650.
+model: surya
+labels: surya_arseg
+lora: true
+grad_checkpointing: true     # needed to fit 16GB
+batch_size: 1
+epochs: 20
+ckpt_name: surya
+# NOTE verify Surya's expected input resolution/format before first run (A2 risk).

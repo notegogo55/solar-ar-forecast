@@ -1,0 +1,8 @@
+# Segmentation — U-Net baseline (cheap, unblocks the spine on Kaggle).
+model: unet
+labels: surya_arseg          # shared label set (D4)
+input_res: 1024
+batch_size: 4
+epochs: 50
+lr: 0.001
+ckpt_name: unet
