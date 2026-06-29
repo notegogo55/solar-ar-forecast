@@ -1,7 +1,7 @@
 # data + heavy artifacts NEVER go in git (they live in Kaggle Datasets)
-data/
-outputs/
-checkpoints/
+/data/
+/outputs/
+/checkpoints/
 *.fits
 *.fts
 *.pth

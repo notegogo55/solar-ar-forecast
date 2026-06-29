@@ -1,7 +1,9 @@
 # Track A — data + imaging
-sunpy
-drms
-astropy
+sunpy[net]>=5.1       # includes Fido, GOES client, HEK
+drms>=0.7.1           # JSOC/HMI/AIA export
+astropy>=5.3
+xarray>=2023.1        # GOES NetCDF4 parsing
+netcdf4               # xarray NetCDF4 backend
 scikit-image
 # Track B — forecasting + eval
 numpy
