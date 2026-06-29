@@ -35,7 +35,12 @@ def fetch_sharp_metadata(client, start: str, end: str) -> pd.DataFrame:
         return pd.DataFrame(columns=[k.lower() for k in SHARP_KEYS])
 
     df = keys.rename(columns={k: k.lower() for k in SHARP_KEYS})
-    df["t_rec"] = pd.to_datetime(df["t_rec"], utc=True)
+    # JSOC T_REC format: "2014.10.17_00:00:00_TAI" — strip suffix, normalise separators
+    df["t_rec"] = pd.to_datetime(
+        df["t_rec"].str.replace("_TAI", "", regex=False).str.replace("_", " ", n=1),
+        format="%Y.%m.%d %H:%M:%S",
+        utc=True,
+    )
     for col in ("harpnum", "quality"):
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
     for col in ("lon_fwt", "lat_fwt", "usflux", "area_acr"):
