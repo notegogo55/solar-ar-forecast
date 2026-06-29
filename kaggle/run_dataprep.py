@@ -46,7 +46,7 @@ except ImportError:
 # schema without waiting for the full ~13-day window.
 # Once dry-run passes, re-run without --dry-run and "Save Version".
 subprocess.run(
-    ["python", "-m", "src.data.fetch",
+    ["python", "-u", "-m", "src.data.fetch",
      "--config", "configs/data_v1.yaml",
      "--dry-run"],                        # remove this line for the full fetch
     check=True,
