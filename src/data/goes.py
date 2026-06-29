@@ -27,20 +27,20 @@ _CLASS_RANK = {"A": 0, "B": 1, "C": 2, "M": 3, "X": 4}
 # ---------------------------------------------------------------------------
 
 def fetch_noaa_events(start: str, end: str) -> pd.DataFrame:
-    """Download NOAA/SWPC monthly flare event files covering [start, end].
+    """Download NOAA/SWPC flare event list for [start, end].
 
+    Tries SWPC HTTP archive first; falls back to sunpy HEK if that fails.
     Returns DataFrame: start_time, peak_time, end_time, noaa_ar (int),
     goes_class (str), is_ge_M1 (bool).
-    Rows with no identifiable NOAA AR are kept (noaa_ar=0) so callers can
-    decide whether to drop them.
     """
     t0 = pd.Timestamp(start, tz="UTC")
     t1 = pd.Timestamp(end, tz="UTC")
 
+    # --- Primary: SWPC monthly event text files ---
     dfs = []
     for year, month in _months_in_range(t0, t1):
         url = _SWPC_EVENTS_URL.format(year=year, month=month)
-        log.info("NOAA events: %s", url)
+        log.info("NOAA events (SWPC): %s", url)
         try:
             with urllib.request.urlopen(url, timeout=60) as resp:
                 text = resp.read().decode("utf-8", errors="replace")
@@ -48,19 +48,60 @@ def fetch_noaa_events(start: str, end: str) -> pd.DataFrame:
             if not df.empty:
                 dfs.append(df)
         except Exception as exc:
-            log.warning("Could not fetch %s: %s", url, exc)
+            log.warning("SWPC fetch failed: %s", exc)
 
-    if not dfs:
-        log.warning("No NOAA event data for %s -> %s", start, end)
+    if dfs:
+        df = pd.concat(dfs, ignore_index=True)
+        df = df[(df["start_time"] >= t0) & (df["start_time"] <= t1)].copy()
+        log.info("NOAA events: %d total, %d >=M1.0", len(df), df["is_ge_M1"].sum())
+        return df
+
+    # --- Fallback: sunpy HEK (Heliophysics Event Knowledgebase) ---
+    log.warning("SWPC archive unavailable -- trying sunpy HEK fallback")
+    return _fetch_hek_events(start, end)
+
+
+def _fetch_hek_events(start: str, end: str) -> pd.DataFrame:
+    """Fetch flare events from sunpy HEK as fallback for SWPC archive."""
+    try:
+        from sunpy.net import Fido, attrs as a
+        log.info("HEK query: FL events %s -> %s", start, end)
+        result = Fido.search(
+            a.Time(start, end),
+            a.hek.EventType("FL"),
+        )
+        table = Fido.fetch(result[0])   # result[0] is the HEK response table
+        # HEK returns an astropy Table or pandas-like object
+        rows = []
+        for row in table:
+            goes_cls = str(row.get("fl_goescls", "") or "")
+            if not goes_cls or goes_cls[0] not in ("C", "M", "X"):
+                continue
+            try:
+                t_start = pd.Timestamp(str(row["event_starttime"]), tz="UTC")
+                t_peak = pd.Timestamp(str(row["event_peaktime"]), tz="UTC")
+                t_end = pd.Timestamp(str(row["event_endtime"]), tz="UTC")
+            except Exception:
+                continue
+            ar_raw = str(row.get("ar_noaanum", "") or "0")
+            try:
+                noaa_ar = int(ar_raw)
+            except ValueError:
+                noaa_ar = 0
+            rows.append({
+                "start_time": t_start,
+                "peak_time": t_peak,
+                "end_time": t_end,
+                "goes_class": goes_cls,
+                "noaa_ar": noaa_ar,
+                "is_ge_M1": _class_ge_M1(goes_cls),
+            })
+        df = pd.DataFrame(rows) if rows else _empty_events()
+        log.info("HEK events: %d total, %d >=M1.0", len(df), df["is_ge_M1"].sum())
+        return df
+    except Exception as exc:
+        log.warning("HEK fallback also failed: %s", exc)
         return _empty_events()
-
-    df = pd.concat(dfs, ignore_index=True)
-    df = df[(df["start_time"] >= t0) & (df["start_time"] <= t1)].copy()
-    log.info(
-        "NOAA events in window: %d total, %d >=M1.0",
-        len(df), df["is_ge_M1"].sum(),
-    )
-    return df
 
 
 def fetch_goes_flux(start: str, end: str) -> pd.DataFrame:
@@ -163,11 +204,16 @@ def _parse_goes_files(files) -> pd.DataFrame:
         for f in files:
             ds = xr.open_dataset(f)
             time = pd.to_datetime(ds["time"].values, utc=True)
-            # Variable names differ between GOES-15 and GOES-16 products
-            xrsa = (ds.get("xrsa_flux") or ds.get("a_flux") or
-                    ds.get("xrsa") or ds.get("A_FLUX"))
-            xrsb = (ds.get("xrsb_flux") or ds.get("b_flux") or
-                    ds.get("xrsb") or ds.get("B_FLUX"))
+            # Variable names differ between GOES-15 and GOES-16 products.
+            # Must use explicit 'is not None' — Python 'or' crashes on DataArrays.
+            xrsa = next(
+                (ds.get(k) for k in ("xrsa_flux", "a_flux", "xrsa", "A_FLUX")
+                 if ds.get(k) is not None), None
+            )
+            xrsb = next(
+                (ds.get(k) for k in ("xrsb_flux", "b_flux", "xrsb", "B_FLUX")
+                 if ds.get(k) is not None), None
+            )
             dfs.append(pd.DataFrame({
                 "time": time,
                 "xrsa": xrsa.values.ravel() if xrsa is not None else float("nan"),

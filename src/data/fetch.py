@@ -150,19 +150,37 @@ def request_image_export(client, queries: list, resolution: int,
     for q in queries:
         scale = aia_scale if q["series"] == _AIA_SERIES else hmi_scale
         log.info("Export: %s  (scale=%.4f)", q["query"], scale)
-        req = client.export(
-            q["query"],
-            email=jsoc_email,
-            method="url",
-            protocol="fits",
-            # Server-side rescale: op=rescale scales the full-disk image
-            # to `resolution`x`resolution` before download (D5 constraint).
-            process={"im_patch": {"op": "rescale", "scale": scale,
-                                   "do_stretchmarks": 0}},
-        )
+        # JSOC limits concurrent pending requests (status=7). Retry with backoff.
+        req = _export_with_retry(client, q["query"], jsoc_email, scale)
         log.info("  request_id=%s  status=%s", req.id, req.status)
         export_reqs.append({"req": req, "channel": q["channel"]})
     return export_reqs
+
+
+def _export_with_retry(client, query: str, jsoc_email: str, scale: float,
+                        max_wait_s: int = 600):
+    """Submit JSOC export, retrying every 120s if status=7 (too many pending)."""
+    deadline = time.time() + max_wait_s
+    while True:
+        req = client.export(
+            query,
+            email=jsoc_email,
+            method="url",
+            protocol="fits",
+            process={"im_patch": {"op": "rescale", "scale": scale,
+                                   "do_stretchmarks": 0}},
+        )
+        if req.status != 7:
+            return req
+        if time.time() > deadline:
+            raise RuntimeError(
+                f"JSOC still returning status=7 (too many pending) after "
+                f"{max_wait_s}s. Check https://jsoc.stanford.edu/ajax/exportdata.html"
+            )
+        log.warning(
+            "JSOC status=7 (too many pending requests) -- waiting 120s before retry"
+        )
+        time.sleep(120)
 
 
 def poll_and_download(export_reqs: list, out_dir: Path,
@@ -186,6 +204,9 @@ def poll_and_download(export_reqs: list, out_dir: Path,
         still_pending = []
         for item in pending:
             req = item["req"]
+            if req.id is None:
+                log.error("Export has no request ID (status=%s) -- skipping", req.status)
+                continue
             req.wait(timeout=30)
             if req.status == "complete":
                 log.info("Export %s complete (%d files) -- downloading",
