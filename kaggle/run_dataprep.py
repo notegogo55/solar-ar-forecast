@@ -12,18 +12,17 @@ Secrets required (set in Kaggle Secrets before running):
   GH_PAT      -- GitHub fine-grained PAT (if repo is private)
 """
 import os
+import shutil
 import subprocess
 
 # ── 1. Pull source code ────────────────────────────────────────────────────
 REPO = "https://github.com/notegogo55/solar-ar-forecast.git"
 
-# For a private repo, read the PAT from Kaggle Secrets:
-# from kaggle_secrets import UserSecretsClient
-# _tok = UserSecretsClient().get_secret("GH_PAT")
-# REPO = f"https://{_tok}@github.com/notegogo55/solar-ar-forecast.git"
-
+# Always start from /kaggle/working to avoid nested repo/ dirs across runs.
+os.chdir("/kaggle/working")
+shutil.rmtree("repo", ignore_errors=True)
 subprocess.run(["git", "clone", "--depth", "1", REPO, "repo"], check=True)
-os.chdir("repo")
+os.chdir("/kaggle/working/repo")
 
 sha = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
 print(f"git SHA: {sha}")
