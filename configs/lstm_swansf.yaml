@@ -1,10 +1,44 @@
-# Forecasting (Track B) — develop/validate on SWAN-SF first, runs LOCAL on 1650/CPU.
+# Track B — SWAN-SF forecaster (D9)
+# Develop & validate on SWAN-SF first (no images); runs LOCAL on 1650/CPU.
+# Strict validation protocol (D8): time-block + whole-AR split, resample TRAIN
+# only, metrics TSS/HSS/BSS + reliability, one held-out window evaluated once.
+
+# ── Data ─────────────────────────────────────────────────────────────────────
 dataset: swan_sf
-target: "ge_M_within_24h"    # D7
-lookback_hours: 24
-ensemble: [holt_winters, lstm]
-# validation protocol (D8): time-block + whole-AR split, resample TRAIN only,
-# metrics TSS/HSS/BSS + reliability, one held-out window evaluated once.
-split: time_block_whole_ar
-resample: train_only
+swan_sf_partitions: [1, 2, 3, 4, 5]   # which partitions to load
+series_length: 60                      # timesteps per instance (12 h @ 12 min)
+
+# ── Target & forecast horizon (D7) ───────────────────────────────────────────
+target: "ge_M_within_24h"     # ≥M1.0 flare in the prediction window
+# Label is read from the SWAN-SF instance filename prefix (M/X -> positive).
+
+# ── Validation protocol (D8) ─────────────────────────────────────────────────
+# SWAN-SF's 5 partitions are non-overlapping TIME blocks -> partition-level split
+# is the canonical time-block split. Whole-AR guard drops any HARPNUM that spans
+# both train and test from the test set (src.eval.splits.partition_split).
+split: partition                # partition-level time-block split
+train_partitions: [1, 2, 3, 4]
+test_partitions: [5]            # one held-out window, evaluated once
+resample: train_only            # minority oversampling on TRAIN only
 metrics: [tss, hss, bss, reliability]
+rel_bins: 10                    # reliability-table bin count
+
+# ── Ensemble (D9) ────────────────────────────────────────────────────────────
+ensemble: [holt_winters, lstm]
+ensemble_alpha: 0.5           # P = alpha*P_hw + (1-alpha)*P_lstm
+
+# ── Holt-Winters ──────────────────────────────────────────────────────────────
+hw_smoothing_level: 0.3       # alpha (level)
+hw_smoothing_trend: 0.1       # beta  (trend)
+hw_feature: R_VALUE           # scalar SHARP feature HW smooths (D9); null = first feature
+
+# ── LSTM ─────────────────────────────────────────────────────────────────────
+lstm_hidden: 64
+lstm_layers: 2
+lstm_dropout: 0.3
+lstm_epochs: 30
+lstm_lr: 0.001
+lstm_batch_size: 256
+
+# ── Reproducibility ───────────────────────────────────────────────────────────
+seed: 42
